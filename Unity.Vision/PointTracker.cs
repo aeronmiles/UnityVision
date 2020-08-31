@@ -82,6 +82,7 @@ public class PointTracker : MonoBehaviour
     }
 }
 
+// TODO : optimize as IJobParallelFor
 [BurstCompile(CompileSynchronously = true)]
 public struct TrackPointsJob : IJob
 {
