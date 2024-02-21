@@ -5,48 +5,49 @@ using Unity.Mathematics;
 using Unity.Burst;
 using System.Collections.Generic;
 
+// @TODO: refactor
 public class PointTracker : MonoBehaviour
 {
-    [SerializeField] CameraImage image = null;
-    public Color Color;
-    public float GammaCorrection = 2.2f;
-    public float Threshold = 0.5f;
-    public float MinSpacingThreshold = 0.01f;
-    public float MergeDistance = 2f;
+    [SerializeField] private CameraImage _image = null;
+    public Color color;
+    public float gammaCorrection = 2.2f;
+    public float threshold = 0.5f;
+    public float minSpacingThreshold = 0.01f;
+    public float mergeDistance = 2f;
 
     [Header("Debug")]
-    public float Width;
-    public float Height;
+    public float width;
+    public float height;
     public GameObject pointObj;
-    private List<GameObject> pointObjs = new List<GameObject>();
+    private readonly List<GameObject> _pointObjs = new List<GameObject>();
 
     private void OnEnable()
     {
-        image.imageUpdate += onImageUpdate;
+        _image.imageUpdate += OnImageUpdate;
     }
 
     private void OnDisable()
     {
-        image.imageUpdate -= onImageUpdate;
+        _image.imageUpdate -= OnImageUpdate;
     }
 
-    private void onImageUpdate(WebCamTexture tex)
+    private void OnImageUpdate(WebCamTexture tex)
     {
 
-        TrackPointsJob pointJob = trackPointJob(tex);
+        TrackPointsJob pointJob = TrackPointJob(tex);
         JobHandle handle = pointJob.Schedule();
         handle.Complete();
 
         int l = pointJob.r[1];
-        while (pointObjs.Count < l) pointObjs.Add(Instantiate(pointObj, transform));
+        while (_pointObjs.Count < l) _pointObjs.Add(Instantiate(pointObj, transform));
 
         int x = 0;
-        foreach (var o in pointObjs)
+        foreach (var o in _pointObjs)
         {
             o.SetActive(false);
             if (x < l)
             {
-                o.transform.position = new Vector3(pointJob.result[x].x * Width, pointJob.result[x].y * Height, 0f);
+                o.transform.position = new Vector3(pointJob.result[x].x * width, pointJob.result[x].y * height, 0f);
                 o.SetActive(true);
                 x++;
             }
@@ -55,23 +56,24 @@ public class PointTracker : MonoBehaviour
         pointJob.Dispose();
     }
 
-    private Color32[] values;
-    private TrackPointsJob trackPointJob(WebCamTexture tex)
+    private Color32[] _values;
+    private TrackPointsJob TrackPointJob(WebCamTexture tex)
     {
-        TrackPointsJob pointsJob = new TrackPointsJob();
+        TrackPointsJob pointsJob = new TrackPointsJob
+        {
+            color = math.pow(new float3(color.r, color.g, color.b), gammaCorrection),
+            threshold = threshold,
+            mergeDistance = mergeDistance,
+            minSpacingThreshold = minSpacingThreshold,
+            width = tex.width,
+            height = tex.height
+        };
 
-        pointsJob.color = math.pow(new float3(Color.r, Color.g, Color.b), GammaCorrection);
-        pointsJob.threshold = Threshold;
-        pointsJob.mergeDistance = MergeDistance;
-        pointsJob.minSpacingThreshold = MinSpacingThreshold;
-        pointsJob.width = tex.width;
-        pointsJob.height = tex.height;
+        _values = tex.GetPixels32(_values);
 
-        values = tex.GetPixels32(values);
-        
-        int l = values.Length;
+        int l = _values.Length;
 
-        pointsJob.values = new NativeArray<Color32>(values, Allocator.TempJob);
+        pointsJob.values = new NativeArray<Color32>(_values, Allocator.TempJob);
         pointsJob.result = new NativeArray<float2>(l, Allocator.TempJob);
         pointsJob.r = new NativeArray<int>(l, Allocator.TempJob);
         pointsJob.r2 = new NativeArray<float>(l, Allocator.TempJob);
@@ -102,7 +104,7 @@ public struct TrackPointsJob : IJob
         // find all pixels within threshold
         int l = values.Length;
         int nPixels = 0;
-        
+
         float minSpacing = float.MaxValue;
         float2 lastPos = float2.zero;
         for (int i = 0; i < l; i++)
@@ -112,7 +114,7 @@ public struct TrackPointsJob : IJob
             {
                 float y = math.floor(i / width);
                 float2 pos = new float2((i - y * width) / width, y / height);
-                if (math.distance(lastPos, pos) > minSpacingThreshold) 
+                if (math.distance(lastPos, pos) > minSpacingThreshold)
                 {
                     minSpacing = math.min(math.distance(lastPos, pos), minSpacing);
                 }
@@ -129,7 +131,7 @@ public struct TrackPointsJob : IJob
         mergeDistance *= minSpacing;
         positions[0] = new PointValues(pixels[0], pixels[0], 1);
         int nPositions = 1;
-        int posMaxIndex = positions.Length - 1;
+        // int posMaxIndex = positions.Length - 1;
         for (int pI = 1; pI < nPixels; pI++)
         {
             int closestInd = 0;

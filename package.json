@@ -1,0 +1,15 @@
+{
+  "name": "com.am.unity.ml.collections",
+  "version": "1.0.1",
+  "displayName": "AM Unity ML Collections",
+  "description": "Unity and C# ml collections",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.am.unity.collections": "1.0.1"
+ },
+ "keywords": [
+  ],
+  "author": {
+    "name": "Aeron Miles"
+  }
+}
